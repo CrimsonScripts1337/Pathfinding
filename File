@@ -472,7 +472,7 @@ function SuperPath.Agent(agent, agentParams, pathSettings)
 		RateLimit               = reconcile(pathSettings.RateLimit, Config.RATE_LIMIT),
 
 		Agent = agent,
-        RootPart = (agent:GetRootPart()) or nil,
+        RootPart = (agent:FindFirstChild("HumanoidRootPart")) or nil,
 		Humanoid = (useHum and agent:FindFirstChild("Humanoid")) or nil,
 		Path = path, Idle = true, LastError = nil, WaypointIndex = 0,
 		LastWaypoint = nil, LatestWaypoint = nil, NextWaypoint = nil,
