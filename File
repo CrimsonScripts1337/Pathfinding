@@ -321,7 +321,7 @@ function Path:Run(goal, origin)
 	return true
 end
 
-function Path:Tween(goal, origin, speed)
+function Path:Tween(goal, speed, origin)
 	if not self or self.IsDestroying then return end
 	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
 	self.RateLimit = os.clock()
