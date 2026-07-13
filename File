@@ -27,7 +27,7 @@ local Config = {
 		FilteredTags = {},
 		FilteredInstances = {},
 		Cooldown = 0,
-		MaxYOffset = 2,
+		MaxYOffset = 1337,
 	},
 	WAYPOINT_TIMEOUT = 8,
 	VISUALIZE = false,
