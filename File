@@ -321,63 +321,6 @@ function Path:Run(goal, origin)
 	return true
 end
 
-function Path:Tween(goal, speed, origin)
-
-	if not self or self.IsDestroying then return end
-	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
-	self.LastRun = os.clock()
-
-	speed = speed or self.DefaultSpeed or 16
-
-	local customOrigin = true
-	origin = reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)())
-	goal = toVector3(goal)
-
-	clearRoute(self)
-	safeCleanUp(self, "_blockCon")
-	safeCleanUp(self, "_activeTween")
-
-	local pivot = self.Agent:GetPivot()
-	local rootPart = self.Agent.PrimaryPart or self.Humanoid.RootPart
-	print("goal type:", typeof(goal), "origin type:", typeof(origin))
-	local distance = (goal - origin).Magnitude
-	if distance <= 0 then return false end
-
-	local duration = distance / speed
-
-	self.Idle = false
-	self.IsPathfinding = false
-	self.IsTweening = true
-	self.Goal = goal
-
-	self.StartRun:Fire(goal)
-	self.DirectRun:Fire(goal)
-
-	local lookCFrame = CFrame.lookAt(origin, Vector3.new(goal.X, origin.Y, goal.Z))
-	local targetCFrame = CFrame.new(goal.X, pivot.Position.Y, goal.Z) * (lookCFrame - lookCFrame.Position)
-
-	local tween = TweenService:Create(
-		rootPart,
-		TweenInfo.new(duration, Enum.EasingStyle.Linear),
-		{ CFrame = targetCFrame }
-	)
-
-	self._activeTween = tween
-
-	tween.Completed:Connect(function(playbackState)
-		if self._activeTween ~= tween then return end -- superseded by a newer call
-		self._activeTween = nil
-		self.IsTweening = false
-		if playbackState == Enum.PlaybackState.Completed then
-			self.Idle = true
-			self.Reached:Fire(goal) -- assumes you have a Reached/EndRun style signal
-		end
-	end)
-
-	tween:Play()
-	return true
-end
-
 function Path:TravelToWaypoint(index, shouldContinue, _sF)
 	if not self or self.IsDestroying then return end
 	safeCleanUp(self, "_observer"); safeCleanUp(self, "_moveCon")
@@ -422,8 +365,107 @@ function Path:TravelToWaypoint(index, shouldContinue, _sF)
 	end
 end
 
+function Path:Tween(goal, origin, speed)
+	if not self or self.IsDestroying then return end
+	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
+	self.RateLimit = os.clock()
+	speed = speed or 16
+	local customOrigin = true
+	origin = reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)())
+	goal = toVector3(goal)
+	clearRoute(self)
+	safeCleanUp(self, "_blockCon")
+	self:StopTween()
+	if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
+	local ok, wps, partial = Util.Compute(self, origin, goal)
+	if not ok then declareError(self, "CompError") return false end
+	self.IsPathfinding, self.IsPartial, self.PathWaypoints = true, partial, wps
+	self.NextWaypoint, self.Goal, self.TweenSpeed = wps[1], goal, speed
+	self.StartRun:Fire(goal)
+	Util.Visualize(self)
+	self._blockCon = self.Path.Blocked:Connect(function(wpIndex)
+		if wpIndex >= self.WaypointIndex then
+			safeCleanUp(self, "_blockCon")
+			self.Blocked:Fire(self.PathWaypoints[wpIndex], wpIndex)
+			if self.RetryOnBlocked then self:Tween(goal, origin, speed) end
+		end
+	end)
+	task.spawn(function() self:TweenToWaypoint(1, true) end)
+	return true
+end
+
+function Path:TweenToWaypoint(index, shouldContinue)
+	if not self or self.IsDestroying then return end
+	self:StopTween()
+	local wp = self.PathWaypoints[index]
+	if not wp then return end
+	self.WaypointIndex = index
+	self.LastWaypoint, self.LatestWaypoint, self.NextWaypoint =
+		self.PathWaypoints[index-2], self.PathWaypoints[index-1], wp
+	self.Idle = false
+
+	local root = self.RootPart
+	if not root then
+		if self.Agent:IsA("BasePart") then
+			root = self.Agent
+		else
+			root = self.Agent:FindFirstChild("HumanoidRootPart")
+		end
+	end
+	if not root then
+		doWarn("No RootPart to tween — pass an agent that is (or contains) a BasePart named HumanoidRootPart")
+		freezeAgent(self.Agent)
+		declareError(self, "TargetUnreachable")
+		return
+	end
+
+	local dist = (wp.Position - root.Position).Magnitude
+	local speed = self.TweenSpeed or 16
+	local duration = math.max(dist / speed, 0.01)
+
+	local flatLook = Vector3.new(wp.Position.X, root.Position.Y, wp.Position.Z)
+	local rotation = (flatLook - root.Position).Magnitude > 0.001
+		and CFrame.new(root.Position, flatLook)
+		or root.CFrame
+	local targetCFrame = CFrame.new(wp.Position) * (rotation - rotation.Position)
+
+	local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = targetCFrame })
+	self._activeTween = tween
+	self.IsTweening = true
+
+	local function done(reached)
+		if self.Idle then return end
+		self.IsTweening = false
+		if reached then
+			self.WaypointReached:Fire(wp, index)
+			if not self.PathWaypoints[index + 1] then
+				clearRoute(self); self.GoalReached:Fire(wp)
+			elseif not self.Idle and shouldContinue then
+				self:TweenToWaypoint(index + 1, true)
+			end
+		else
+			declareError(self, "TargetUnreachable")
+		end
+	end
+
+	self._observer = task.delay(self.WaypointTimeout, function()
+		if self.IsTweening then self:StopTween(); done(false) end
+	end)
+
+	tween.Completed:Once(function(playbackState)
+		safeCleanUp(self, "_observer")
+		done(playbackState == Enum.PlaybackState.Completed)
+	end)
+
+	tween:Play()
+end
+
 function Path:StopTween()
-	safeCleanUp(self, "_activeTween")
+	if self._activeTween then
+		pcall(function() self._activeTween:Cancel() end)
+		self._activeTween = nil
+	end
+	safeCleanUp(self, "_observer")
 	self.IsTweening = false
 end
 
