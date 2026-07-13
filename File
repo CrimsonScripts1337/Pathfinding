@@ -398,7 +398,7 @@ function Path:Tween(goal, speed, origin)
 			end
 		end
 	end
-	if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
+	--if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
 	local ok, wps, partial = Util.Compute(self, origin, goal)
 	if not ok then declareError(self, "CompError") return false end
 	self.IsPathfinding, self.IsPartial, self.PathWaypoints = true, partial, wps
