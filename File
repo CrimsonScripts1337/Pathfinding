@@ -5,7 +5,7 @@
 local PFS    = game:GetService("PathfindingService")
 local CS     = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
-local TS     = game:GetService("TweenService")
+local TweenService     = game:GetService("TweenService")
 
 -- Types (plain `type`, NOT `export type`, so loadstring works)
 type ErrorType =
@@ -324,6 +324,62 @@ end
 function Path:Tween(goal, speed, origin)
 	if not self or self.IsDestroying then return end
 	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
+	self.LastRun = os.clock()
+
+	speed = speed or self.DefaultSpeed or 16
+
+	local customOrigin = true
+	origin = reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)())
+	goal = toVector3(goal)
+
+	clearRoute(self)
+	safeCleanUp(self, "_blockCon")
+	safeCleanUp(self, "_activeTween")
+
+	local pivot = self.Agent:GetPivot()
+	local rootPart = self.Agent.PrimaryPart or self.Humanoid.RootPart
+
+	local distance = (goal - origin).Magnitude
+	if distance <= 0 then return false end
+
+	local duration = distance / speed
+
+	self.Idle = false
+	self.IsPathfinding = false
+	self.IsTweening = true
+	self.Goal = goal
+
+	self.StartRun:Fire(goal)
+	self.DirectRun:Fire(goal)
+
+	local lookCFrame = CFrame.lookAt(origin, Vector3.new(goal.X, origin.Y, goal.Z))
+	local targetCFrame = CFrame.new(goal.X, pivot.Position.Y, goal.Z) * (lookCFrame - lookCFrame.Position)
+
+	local tween = TweenService:Create(
+		rootPart,
+		TweenInfo.new(duration, Enum.EasingStyle.Linear),
+		{ CFrame = targetCFrame }
+	)
+
+	self._activeTween = tween
+
+	tween.Completed:Connect(function(playbackState)
+		if self._activeTween ~= tween then return end -- superseded by a newer call
+		self._activeTween = nil
+		self.IsTweening = false
+		if playbackState == Enum.PlaybackState.Completed then
+			self.Idle = true
+			self.Reached:Fire(goal) -- assumes you have a Reached/EndRun style signal
+		end
+	end)
+
+	tween:Play()
+	return true
+end
+
+function Path:Tween(goal, speed, origin)
+	if not self or self.IsDestroying then return end
+	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
 	self.RateLimit = os.clock()
 	local customOrigin = true
 	origin = reconcile(toCFrame(origin), (function() customOrigin = false; return getAgentPos(self) end)())
@@ -402,6 +458,11 @@ function Path:TravelToWaypoint(index, shouldContinue, _sF)
 			end
 		end)
 	end
+end
+
+function Path:StopTween()
+	safeCleanUp(self, "_activeTween")
+	self.IsTweening = false
 end
 
 function Path:Pause()
