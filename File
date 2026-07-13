@@ -366,26 +366,15 @@ function Path:TravelToWaypoint(index, shouldContinue, _sF)
 end
 
 function Path:Tween(goal, origin, speed)
-	print("1")
 	if not self or self.IsDestroying then return end
-	print("2")
 	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
-	print("3")
 	self.RateLimit = os.clock()
-	print("4")
 	speed = speed or 16
-	print("5")
 	local customOrigin = true
-	print("6")
 	origin = reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)())
-	print("7")
 	goal = toVector3(goal)
-	print("8")
 	clearRoute(self)
-	print("9")
 	safeCleanUp(self, "_blockCon")
-	print("10")
-	print("11")
 	if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
 	local ok, wps, partial = Util.Compute(self, origin, goal)
 	if not ok then declareError(self, "CompError") return false end
@@ -405,8 +394,11 @@ function Path:Tween(goal, origin, speed)
 end
 
 function Path:TweenToWaypoint(index, shouldContinue)
+	print("1")
 	if not self or self.IsDestroying then return end
+	print("2")
 	self:StopTween()
+	print("3")
 	local wp = self.PathWaypoints[index]
 	if not wp then return end
 	self.WaypointIndex = index
