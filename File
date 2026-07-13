@@ -264,7 +264,7 @@ end
 local function getAgentPos(self) return self.Agent:GetPivot().Position end
 local function freezeAgent(agent)
 	local h = agent:FindFirstChild("Humanoid")
-	if h then TS:Create(self.HumanoidRootPart, TweenInfo.new((agent:GetPivot().Position - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play() end
+	if h then TS:Create(game:GetService("Players").LocalPlayer.Character.HumanoidRootPart, TweenInfo.new((agent:GetPivot().Position - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play() end
 end
 
 local Path = {}; Path.__index = Path
@@ -285,7 +285,7 @@ function Path:Run(goal, origin)
 			if Util.RaycastCheck(self, self.Agent:GetPivot().Position, goal) then
 				self.Idle = false; self.IsPathfinding = false; self.Goal = goal
 				self.StartRun:Fire(goal); self.DirectRun:Fire(goal)
-				TS:Create(self.HumanoidRootPart, TweenInfo.new((goal - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play(); return true
+				TS:Create(game:GetService("Players").LocalPlayer.Character.HumanoidRootPart, TweenInfo.new((goal - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play(); return true
 			end
 		end
 	end
@@ -332,7 +332,7 @@ function Path:TravelToWaypoint(index, shouldContinue, _sF)
 	self._observer = task.delay(self.WaypointTimeout, function() safeCleanUp(self, "_moveCon"); done(false) end)
 	local hum = self.Humanoid
 	if hum then
-		TS:Create(self.HumanoidRootPart, TweenInfo.new((wp.Position - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play()
+		TS:Create(game:GetService("Players").LocalPlayer.Character.HumanoidRootPart, TweenInfo.new((wp.Position - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play()
 		if not (_sF and index == 1) then
 			if wp.Action == Enum.PathWaypointAction.Jump and not self.AgentInAir then
 				hum.Jump = true
@@ -359,7 +359,7 @@ function Path:Resume()
 	if not self or self.IsDestroying or not self.Idle then return end
 	self.Idle = false; self.Resumed:Fire()
 	if self.IsPathfinding then self:TravelToWaypoint(self.WaypointIndex, true)
-	else TS:Create(self.HumanoidRootPart, TweenInfo.new((self.Goal - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play() end
+	else TS:Create(game:GetService("Players").LocalPlayer.Character.HumanoidRootPart, TweenInfo.new((self.Goal - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play() end
 end
 function Path:Halt()
 	if not self or self.IsDestroying or self.Idle then return end
