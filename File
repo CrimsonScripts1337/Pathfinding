@@ -150,35 +150,61 @@ do
 	local function declareError(self, et) self.LastError = et; self.Error:Fire(et) end
 
 	function Util.Compute(pathObj, origin, goal)
-		local path = pathObj.Path
-		local DUW, OSNJ, OFNJ = pathObj.DeleteUnneededWaypoints, pathObj.OnStepupNoJump, pathObj.OnFallNoJump
-		local ok, err = pcall(function() path:ComputeAsync(origin, goal) end)
-		if not ok then doWarn("Failed to compute route: "..err) return false, {}, false end
-		if path.Status == Enum.PathStatus.NoPath then return false, {}, false end
-		local wps = path:GetWaypoints()
-		local kept = nil
-		if DUW or OFNJ or OSNJ then
-			kept = {}
-			for i = 1, #wps do
-				local thisWp, lastWp, nextWp = wps[i], wps[i-1], wps[i+1]
-				if not thisWp then continue end
-				if DUW then
-					local a, b = isSpecialWaypoint(thisWp), isSpecialWaypoint(nextWp)
-					if not (a or b) and lastWp and (thisWp.Position - lastWp.Position).Magnitude < pathObj.MinimumSpacing then
-						continue
-					end
+	local path = pathObj.Path
+	local DUW, OSNJ, OFNJ = pathObj.DeleteUnneededWaypoints, pathObj.OnStepupNoJump, pathObj.OnFallNoJump
+
+	print("[Compute] path object:", path)
+	print("[Compute] origin:", origin, "goal:", goal)
+
+	local ok, err = pcall(function() path:ComputeAsync(origin, goal) end)
+	print("[Compute] pcall ok:", ok, "err:", err)
+
+	if not ok then
+		doWarn("Failed to compute route: "..tostring(err))
+		print("[Compute] returning early — pcall failed")
+		return false, {}, false
+	end
+
+	print("[Compute] path.Status:", path.Status)
+
+	if path.Status == Enum.PathStatus.NoPath then
+		print("[Compute] returning early — NoPath")
+		return false, {}, false
+	end
+
+	local wps = path:GetWaypoints()
+	print("[Compute] raw waypoint count:", #wps)
+
+	local kept = nil
+	if DUW or OFNJ or OSNJ then
+		kept = {}
+		for i = 1, #wps do
+			local thisWp, lastWp, nextWp = wps[i], wps[i-1], wps[i+1]
+			if not thisWp then continue end
+			if DUW then
+				local a, b = isSpecialWaypoint(thisWp), isSpecialWaypoint(nextWp)
+				if not (a or b) and lastWp and (thisWp.Position - lastWp.Position).Magnitude < pathObj.MinimumSpacing then
+					print(("[Compute] dropping waypoint %d — too close to previous"):format(i))
+					continue
 				end
-				table.insert(kept, thisWp)
-				if thisWp.Action.Name == "Jump" then
-					local yd = thisWp.Position.Y - lastWp.Position.Y
-					if (OFNJ and yd < 0) or (OSNJ and yd < 1) then
-						kept[i] = PathWaypoint.new(thisWp.Position, Enum.PathWaypointAction.Walk)
-					end
+			end
+			table.insert(kept, thisWp)
+			if thisWp.Action.Name == "Jump" then
+				local yd = thisWp.Position.Y - lastWp.Position.Y
+				if (OFNJ and yd < 0) or (OSNJ and yd < 1) then
+					print(("[Compute] converting jump waypoint %d to Walk (yd=%.2f)"):format(i, yd))
+					kept[i] = PathWaypoint.new(thisWp.Position, Enum.PathWaypointAction.Walk)
 				end
 			end
 		end
-		return true, kept or wps, path.Status.Name == "ClosestNoPath"
+		print("[Compute] kept waypoint count:", #kept)
 	end
+
+	local isPartial = path.Status.Name == "ClosestNoPath"
+	print("[Compute] success — partial:", isPartial)
+
+	return true, kept or wps, isPartial
+end
 
 	function Util.Visualize(pathObj)
 		if not pathObj.Visualize then return end
