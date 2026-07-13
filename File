@@ -376,29 +376,43 @@ function Path:Tween(goal, origin, speed)
 	clearRoute(self)
 	safeCleanUp(self, "_blockCon")
 	if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
+	print("1")
 	local ok, wps, partial = Util.Compute(self, origin, goal)
+	print("2")
 	if not ok then declareError(self, "CompError") return false end
+	print("3")
 	self.IsPathfinding, self.IsPartial, self.PathWaypoints = true, partial, wps
+	print("4")
 	self.NextWaypoint, self.Goal, self.TweenSpeed = wps[1], goal, speed
+	print("5")
 	self.StartRun:Fire(goal)
+	print("6")
 	Util.Visualize(self)
+	print("7")
 	self._blockCon = self.Path.Blocked:Connect(function(wpIndex)
+		print("8")
 		if wpIndex >= self.WaypointIndex then
+			print("9")
 			safeCleanUp(self, "_blockCon")
+			print("10")
 			self.Blocked:Fire(self.PathWaypoints[wpIndex], wpIndex)
+			print("11")
 			if self.RetryOnBlocked then self:Tween(goal, origin, speed) end
+			print("12")
 		end
 	end)
+	print("13")
 	task.spawn(function() self:TweenToWaypoint(1, true) end)
+	print("14")
 	return true
 end
 
 function Path:TweenToWaypoint(index, shouldContinue)
-	print("1")
+	print("15")
 	if not self or self.IsDestroying then return end
-	print("2")
+	print("16")
 	self:StopTween()
-	print("3")
+	print("17")
 	local wp = self.PathWaypoints[index]
 	if not wp then return end
 	self.WaypointIndex = index
