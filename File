@@ -338,7 +338,7 @@ function Path:Tween(goal, speed, origin)
 
 	local pivot = self.Agent:GetPivot()
 	local rootPart = self.Agent.PrimaryPart or self.Humanoid.RootPart
-
+	print("goal type:", typeof(goal), "origin type:", typeof(origin))
 	local distance = (goal - origin).Magnitude
 	if distance <= 0 then return false end
 
