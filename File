@@ -1,11 +1,11 @@
 --!optimize 2
 -- SuperPath — single-file build for loadstring / LocalScript use.
 -- Contains: Config, Signal (SignalPlus v3.7.2 MIT © Alexander Lindholt), PathUtils, SuperPath.
-
+print("1337")
 local PFS    = game:GetService("PathfindingService")
 local CS     = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
-local TweenService     = game:GetService("TweenService")
+local TS     = game:GetService("TweenService")
 
 -- Types (plain `type`, NOT `export type`, so loadstring works)
 type ErrorType =
@@ -27,7 +27,7 @@ local Config = {
 		FilteredTags = {},
 		FilteredInstances = {},
 		Cooldown = 0,
-		MaxYOffset = 1337,
+		MaxYOffset = 2,
 	},
 	WAYPOINT_TIMEOUT = 8,
 	VISUALIZE = false,
@@ -150,61 +150,35 @@ do
 	local function declareError(self, et) self.LastError = et; self.Error:Fire(et) end
 
 	function Util.Compute(pathObj, origin, goal)
-	local path = pathObj.Path
-	local DUW, OSNJ, OFNJ = pathObj.DeleteUnneededWaypoints, pathObj.OnStepupNoJump, pathObj.OnFallNoJump
-
-	print("[Compute] path object:", path)
-	print("[Compute] origin:", origin, "goal:", goal)
-
-	local ok, err = pcall(function() path:ComputeAsync(origin, goal) end)
-	print("[Compute] pcall ok:", ok, "err:", err)
-
-	if not ok then
-		doWarn("Failed to compute route: "..tostring(err))
-		print("[Compute] returning early — pcall failed")
-		return false, {}, false
-	end
-
-	print("[Compute] path.Status:", path.Status)
-
-	if path.Status == Enum.PathStatus.NoPath then
-		print("[Compute] returning early — NoPath")
-		return false, {}, false
-	end
-
-	local wps = path:GetWaypoints()
-	print("[Compute] raw waypoint count:", #wps)
-
-	local kept = nil
-	if DUW or OFNJ or OSNJ then
-		kept = {}
-		for i = 1, #wps do
-			local thisWp, lastWp, nextWp = wps[i], wps[i-1], wps[i+1]
-			if not thisWp then continue end
-			if DUW then
-				local a, b = isSpecialWaypoint(thisWp), isSpecialWaypoint(nextWp)
-				if not (a or b) and lastWp and (thisWp.Position - lastWp.Position).Magnitude < pathObj.MinimumSpacing then
-					print(("[Compute] dropping waypoint %d — too close to previous"):format(i))
-					continue
+		local path = pathObj.Path
+		local DUW, OSNJ, OFNJ = pathObj.DeleteUnneededWaypoints, pathObj.OnStepupNoJump, pathObj.OnFallNoJump
+		local ok, err = pcall(function() path:ComputeAsync(origin, goal) end)
+		if not ok then doWarn("Failed to compute route: "..err) return false, {}, false end
+		if path.Status == Enum.PathStatus.NoPath then return false, {}, false end
+		local wps = path:GetWaypoints()
+		local kept = nil
+		if DUW or OFNJ or OSNJ then
+			kept = {}
+			for i = 1, #wps do
+				local thisWp, lastWp, nextWp = wps[i], wps[i-1], wps[i+1]
+				if not thisWp then continue end
+				if DUW then
+					local a, b = isSpecialWaypoint(thisWp), isSpecialWaypoint(nextWp)
+					if not (a or b) and lastWp and (thisWp.Position - lastWp.Position).Magnitude < pathObj.MinimumSpacing then
+						continue
+					end
 				end
-			end
-			table.insert(kept, thisWp)
-			if thisWp.Action.Name == "Jump" then
-				local yd = thisWp.Position.Y - lastWp.Position.Y
-				if (OFNJ and yd < 0) or (OSNJ and yd < 1) then
-					print(("[Compute] converting jump waypoint %d to Walk (yd=%.2f)"):format(i, yd))
-					kept[i] = PathWaypoint.new(thisWp.Position, Enum.PathWaypointAction.Walk)
+				table.insert(kept, thisWp)
+				if thisWp.Action.Name == "Jump" then
+					local yd = thisWp.Position.Y - lastWp.Position.Y
+					if (OFNJ and yd < 0) or (OSNJ and yd < 1) then
+						kept[i] = PathWaypoint.new(thisWp.Position, Enum.PathWaypointAction.Walk)
+					end
 				end
 			end
 		end
-		print("[Compute] kept waypoint count:", #kept)
+		return true, kept or wps, path.Status.Name == "ClosestNoPath"
 	end
-
-	local isPartial = path.Status.Name == "ClosestNoPath"
-	print("[Compute] success — partial:", isPartial)
-
-	return true, kept or wps, isPartial
-end
 
 	function Util.Visualize(pathObj)
 		if not pathObj.Visualize then return end
@@ -280,20 +254,6 @@ local function toVector3(item)
 	elseif isInst and item:IsA("Model") then return item:GetPivot().Position end
 	return item
 end
-local function toCFrame(item)
-	local t = typeof(item)
-	local isInst = t == "Instance"
-	if t == "CFrame" then
-		return item
-	elseif t == "Vector3" or t == "vector" then
-		return CFrame.new(item)
-	elseif isInst and item:IsA("BasePart") then
-		return item.CFrame
-	elseif isInst and item:IsA("Model") then
-		return item:GetPivot()
-	end
-	return item
-end
 local function doWarn(m) warn("[SuperPath]: "..m) end
 local function declareError(self, et) self.LastError = et; self.Error:Fire(et) end
 local function safeCleanUp(self, name)
@@ -304,7 +264,7 @@ end
 local function getAgentPos(self) return self.Agent:GetPivot().Position end
 local function freezeAgent(agent)
 	local h = agent:FindFirstChild("Humanoid")
-	if h then h:MoveTo(agent:GetPivot().Position) end
+	if h then TS:Create(self.HumanoidRootPart, TweenInfo.new((agent:GetPivot().Position - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play() end
 end
 
 local Path = {}; Path.__index = Path
@@ -325,7 +285,7 @@ function Path:Run(goal, origin)
 			if Util.RaycastCheck(self, self.Agent:GetPivot().Position, goal) then
 				self.Idle = false; self.IsPathfinding = false; self.Goal = goal
 				self.StartRun:Fire(goal); self.DirectRun:Fire(goal)
-				self.Humanoid:MoveTo(goal); return true
+				TS:Create(self.HumanoidRootPart, TweenInfo.new((goal - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play(); return true
 			end
 		end
 	end
@@ -372,7 +332,7 @@ function Path:TravelToWaypoint(index, shouldContinue, _sF)
 	self._observer = task.delay(self.WaypointTimeout, function() safeCleanUp(self, "_moveCon"); done(false) end)
 	local hum = self.Humanoid
 	if hum then
-		hum:MoveTo(wp.Position)
+		TS:Create(self.HumanoidRootPart, TweenInfo.new((wp.Position - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play()
 		if not (_sF and index == 1) then
 			if wp.Action == Enum.PathWaypointAction.Jump and not self.AgentInAir then
 				hum.Jump = true
@@ -391,126 +351,6 @@ function Path:TravelToWaypoint(index, shouldContinue, _sF)
 	end
 end
 
-function Path:Tween(goal, origin, speed)
-	if not self or self.IsDestroying then return end
-	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
-	self.RateLimit = os.clock()
-	speed = speed or 16
-	local customOrigin = true
-	origin = reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)())
-	goal = toVector3(goal)
-	clearRoute(self)
-	safeCleanUp(self, "_blockCon")
-	if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
-	print("1")
-	local ok, wps, partial = Util.Compute(self, origin, goal)
-	print("2")
-	if not ok then declareError(self, "CompError") return false end
-	print("3")
-	self.IsPathfinding, self.IsPartial, self.PathWaypoints = true, partial, wps
-	print("4")
-	self.NextWaypoint, self.Goal, self.TweenSpeed = wps[1], goal, speed
-	print("5")
-	self.StartRun:Fire(goal)
-	print("6")
-	Util.Visualize(self)
-	print("7")
-	self._blockCon = self.Path.Blocked:Connect(function(wpIndex)
-		print("8")
-		if wpIndex >= self.WaypointIndex then
-			print("9")
-			safeCleanUp(self, "_blockCon")
-			print("10")
-			self.Blocked:Fire(self.PathWaypoints[wpIndex], wpIndex)
-			print("11")
-			if self.RetryOnBlocked then self:Tween(goal, origin, speed) end
-			print("12")
-		end
-	end)
-	print("13")
-	task.spawn(function() self:TweenToWaypoint(1, true) end)
-	print("14")
-	return true
-end
-
-function Path:TweenToWaypoint(index, shouldContinue)
-	print("15")
-	if not self or self.IsDestroying then return end
-	print("16")
-	self:StopTween()
-	print("17")
-	local wp = self.PathWaypoints[index]
-	if not wp then return end
-	self.WaypointIndex = index
-	self.LastWaypoint, self.LatestWaypoint, self.NextWaypoint =
-		self.PathWaypoints[index-2], self.PathWaypoints[index-1], wp
-	self.Idle = false
-
-	local root = self.RootPart
-	if not root then
-		if self.Agent:IsA("BasePart") then
-			root = self.Agent
-		else
-			root = self.Agent:FindFirstChild("HumanoidRootPart")
-		end
-	end
-	if not root then
-		doWarn("No RootPart to tween — pass an agent that is (or contains) a BasePart named HumanoidRootPart")
-		freezeAgent(self.Agent)
-		declareError(self, "TargetUnreachable")
-		return
-	end
-
-	local dist = (wp.Position - root.Position).Magnitude
-	local speed = self.TweenSpeed or 16
-	local duration = math.max(dist / speed, 0.01)
-
-	local flatLook = Vector3.new(wp.Position.X, root.Position.Y, wp.Position.Z)
-	local rotation = (flatLook - root.Position).Magnitude > 0.001
-		and CFrame.new(root.Position, flatLook)
-		or root.CFrame
-	local targetCFrame = CFrame.new(wp.Position) * (rotation - rotation.Position)
-
-	local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = targetCFrame })
-	self._activeTween = tween
-	self.IsTweening = true
-
-	local function done(reached)
-		if self.Idle then return end
-		self.IsTweening = false
-		if reached then
-			self.WaypointReached:Fire(wp, index)
-			if not self.PathWaypoints[index + 1] then
-				clearRoute(self); self.GoalReached:Fire(wp)
-			elseif not self.Idle and shouldContinue then
-				self:TweenToWaypoint(index + 1, true)
-			end
-		else
-			declareError(self, "TargetUnreachable")
-		end
-	end
-
-	self._observer = task.delay(self.WaypointTimeout, function()
-		if self.IsTweening then self:StopTween(); done(false) end
-	end)
-
-	tween.Completed:Once(function(playbackState)
-		safeCleanUp(self, "_observer")
-		done(playbackState == Enum.PlaybackState.Completed)
-	end)
-
-	tween:Play()
-end
-
-function Path:StopTween()
-	if self._activeTween then
-		pcall(function() self._activeTween:Cancel() end)
-		self._activeTween = nil
-	end
-	safeCleanUp(self, "_observer")
-	self.IsTweening = false
-end
-
 function Path:Pause()
 	if not self or self.IsDestroying or self.Idle then return end
 	self.Idle = true; freezeAgent(self.Agent); self.Paused:Fire()
@@ -519,7 +359,7 @@ function Path:Resume()
 	if not self or self.IsDestroying or not self.Idle then return end
 	self.Idle = false; self.Resumed:Fire()
 	if self.IsPathfinding then self:TravelToWaypoint(self.WaypointIndex, true)
-	else self.Humanoid:MoveTo(self.Goal) end
+	else TS:Create(self.HumanoidRootPart, TweenInfo.new((self.Goal - self.HumanoidRootPart.Position).Magnitude / 50, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play() end
 end
 function Path:Halt()
 	if not self or self.IsDestroying or self.Idle then return end
@@ -579,8 +419,8 @@ function SuperPath.Agent(agent, agentParams, pathSettings)
 		RateLimit               = reconcile(pathSettings.RateLimit, Config.RATE_LIMIT),
 
 		Agent = agent,
-        RootPart = (agent:FindFirstChild("HumanoidRootPart")) or nil,
 		Humanoid = (useHum and agent:FindFirstChild("Humanoid")) or nil,
+		HumanoidRootPart = agent:FindFirstChild("HumanoidRootPart") or nil,
 		Path = path, Idle = true, LastError = nil, WaypointIndex = 0,
 		LastWaypoint = nil, LatestWaypoint = nil, NextWaypoint = nil,
 		IsPartial = false, PathWaypoints = {}, Goal = nil,
