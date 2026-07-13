@@ -382,7 +382,7 @@ function Path:Tween(goal, speed, origin)
 	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
 	self.RateLimit = os.clock()
 	local customOrigin = true
-	origin = reconcile(toCFrame(origin), (function() customOrigin = false; return getAgentPos(self) end)())
+	origin = toVector3(reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)()))
 	goal = toCFrame(goal)
 	clearRoute(self)
 	safeCleanUp(self, "_blockCon")
