@@ -322,6 +322,7 @@ function Path:Run(goal, origin)
 end
 
 function Path:Tween(goal, speed, origin)
+
 	if not self or self.IsDestroying then return end
 	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
 	self.LastRun = os.clock()
@@ -374,45 +375,6 @@ function Path:Tween(goal, speed, origin)
 	end)
 
 	tween:Play()
-	return true
-end
-
-function Path:Tween(goal, speed, origin)
-	if not self or self.IsDestroying then return end
-	if os.clock() - self.LastRun < self.RateLimit then declareError(self, "RateLimit") return end
-	self.RateLimit = os.clock()
-	local customOrigin = true
-	origin = toVector3(reconcile(toVector3(origin), (function() customOrigin = false; return getAgentPos(self) end)()))
-	goal = toCFrame(goal)
-	clearRoute(self)
-	safeCleanUp(self, "_blockCon")
-	if self.DoStuckChecks then task.spawn(Util.ComparePosition, self) end
-	if self.Humanoid and self.RaycastPreRun then
-		if os.clock() - (self._lastRc or 0) >= self.RaycastSettings.Cooldown then
-			self._lastRc = os.clock()
-			if Util.RaycastCheck(self, self.Agent:GetPivot().Position, goal) then
-				self.Idle = false; self.IsPathfinding = false; self.Goal = goal
-				self.StartRun:Fire(goal); self.DirectRun:Fire(goal)
-                TS:Create(self.RootPart, TweenInfo.new((self.RootPart.Position - goal).Magnitude / speed or 100, Enum.EasingStyle.Linear), {CFrame = CFrame.new(goal)}):Play();
-                return true
-			end
-		end
-	end
-	--if (goal - origin).Magnitude > 3000 then declareError(self, "MaxDistExceeded") return false end
-	local ok, wps, partial = Util.Compute(self, origin, goal)
-	if not ok then declareError(self, "CompError") return false end
-	self.IsPathfinding, self.IsPartial, self.PathWaypoints = true, partial, wps
-	self.NextWaypoint, self.Goal = wps[1], goal
-	self.StartRun:Fire(goal)
-	Util.Visualize(self)
-	self._blockCon = self.Path.Blocked:Connect(function(wpIndex)
-		if wpIndex >= self.WaypointIndex then
-			safeCleanUp(self, "_blockCon")
-			self.Blocked:Fire(self.PathWaypoints[wpIndex], wpIndex)
-			if self.RetryOnBlocked then self:Run(goal, origin) end
-		end
-	end)
-	task.spawn(function() self:TravelToWaypoint(1, true, not customOrigin) end)
 	return true
 end
 
